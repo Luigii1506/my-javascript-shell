@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Microfrontend Portal</title>
+    <style>
+      /* Estilos básicos para el shell */
+      body {
+        font-family: sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f0f2f5;
+      }
+      #main-header {
+        background-color: #4caf50;
+        color: white;
+        padding: 1rem;
+        text-align: center;
+      }
+      #main-nav {
+        background-color: #5cb85c;
+        padding: 0.5rem;
+        text-align: center;
+      }
+      #main-nav a {
+        color: white;
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        margin: 0 5px;
+        border-radius: 5px;
+        transition: background-color 0.3s ease;
+      }
+      #main-nav a:hover {
+        background-color: #449d44;
+      }
+      main {
+        padding: 2rem;
+        background-color: white;
+        margin: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        min-height: 600px;
+      }
+      #main-footer {
+        text-align: center;
+        padding: 1rem;
+        color: #777;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+        CRÍTICO: Polyfill global para 'process' y 'global'.
+        Esto es esencial para que el código de Next.js (y posiblemente algunas dependencias de React/Inertia)
+        que espera un entorno Node.js funcione en el navegador. DEBE ir al principio del body.
+    -->
+    <script>
+      if (typeof process === "undefined") {
+        window.process = {
+          env: {
+            NODE_ENV: "production",
+            __NEXT_MANUAL_TRAILING_SLASH: false,
+            __NEXT_ROUTER_BASEPATH: "",
+            __NEXT_I18N_SUPPORT: false,
+            __NEXT_MANUAL_CLIENT_BASE_PATH: "",
+          },
+          emit: function () {},
+          cwd: function () {
+            return "/";
+          },
+          version: "",
+          platform: "browser",
+          browser: true,
+        };
+      }
+      if (typeof global === "undefined") {
+        window.global = window;
+      }
+      if (typeof __dirname === "undefined") {
+        window.__dirname = "/";
+      }
+      if (typeof __filename === "undefined") {
+        window.__filename = "";
+      }
+    </script>
+
+    <!-- Estructura básica del Shell -->
+    <div id="main-header">
+      <h1>Welcome to the Microfrontend Portal!</h1>
+    </div>
+    <nav id="main-nav">
+      <!-- CRÍTICO: Usar onclick para forzar la navegación de Single-SPA -->
+      <a onclick="window.singleSpa.navigateToUrl('/'); return false;"
+        >Home (JS Shell)</a
+      >
+      <a onclick="window.singleSpa.navigateToUrl('/dashboard'); return false;"
+        >Laravel Dashboard</a
+      >
+      <a onclick="window.singleSpa.navigateToUrl('/app'); return false;"
+        >Next.js App</a
+      >
+    </nav>
+
+    <!-- Contenedor principal donde Single-SPA montará las aplicaciones -->
+    <main id="single-spa-application-container"></main>
+
+    <div id="main-footer">
+      <p>&copy; {{ new Date().getFullYear() }} My Microfrontend Portal</p>
+    </div>
+
+    <!--
+        PASO 1: Cargar SystemJS (con defer).
+        'defer' asegura que el script se ejecute después de que el HTML esté completamente parseado.
+    -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/systemjs@6.12.1/dist/system.min.js"
+      defer
+    ></script>
+
+    <!--
+        PASO 2: Definir el Import Map.
+        Este script NO DEBE TENER 'defer' si el siguiente script (el de Single-SPA)
+        lo necesita inmediatamente. Colócalo justo antes del script que use System.import.
+    -->
+    <script type="systemjs-importmap">
+      {
+        "imports": {
+          "single-spa": "https://cdn.jsdelivr.net/npm/single-spa@5.9.0/lib/system/single-spa.min.js",
+          "single-spa-react": "https://cdn.jsdelivr.net/npm/single-spa-react@5.0.0/lib/system/single-spa-react.min.js",
+
+          "nextjs-app": "http://localhost:3001/single-spa-entry.js",
+          "laravel-inertia-app": "http://localhost:5173/resources/js/single-spa-entry-laravel.js"
+        }
+      }
+    </script>
+
+    <!--
+        PASO 3: Cargar Single-SPA directamente (con defer).
+    -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/single-spa@5.9.0/lib/system/single-spa.min.js"
+      defer
+    ></script>
+
+    <!--
+        PASO 4: Tu script de inicialización de Single-SPA.
+        CRÍTICO: Envolver la inicialización dentro de DOMContentLoaded.
+        Esto asegura que el DOM esté completamente cargado y parseado
+        antes de que Single-SPA intente tomar el control del enrutamiento.
+    -->
+    <script>
+      // Declaramos singleSpaGlobal fuera del listener para que sea accesible globalmente.
+      let singleSpaGlobal;
+
+      document.addEventListener("DOMContentLoaded", () => {
+        System.import("single-spa")
+          .then(function (singleSpa) {
+            // Asignamos la instancia importada a la variable global.
+            singleSpaGlobal = singleSpa;
+            singleSpa.registerApplication({
+              name: "nextjs-app",
+              app: () => {
+                console.log(
+                  "Shell: Debug Log 9a - nextjs-app loader function called."
+                );
+                return System.import("nextjs-app");
+              },
+              activeWhen: (location) => {
+                console.log(
+                  "Shell: Debug Log 9c - nextjs-app activeWhen check for:",
+                  location.pathname
+                );
+                return location.pathname.startsWith("/app");
+              },
+              customProps: {},
+            });
+            singleSpa.registerApplication({
+              name: "laravel-inertia-app",
+              app: () => {
+                return System.import("laravel-inertia-app");
+              },
+              activeWhen: (location) => {
+                return location.pathname.startsWith("/dashboard");
+              },
+              customProps: {},
+            });
+
+            singleSpa.start();
+
+            // Router Event Listener (already there, just reconfirming its presence)
+            window.addEventListener("single-spa:routing-event", (evt) => {});
+          })
+          .catch((error) => {});
+      });
+
+      // Hacemos window.singleSpa disponible globalmente tan pronto como sea posible,
+      // incluso si singleSpaGlobal aún no está asignado por la promesa.
+      // Esto previene "singleSpa is not defined" en onclick si se hace clic muy rápido.
+      window.singleSpa = {
+        navigateToUrl: (url) => {
+          if (singleSpaGlobal) {
+            singleSpaGlobal.navigateToUrl(url);
+          } else {
+            window.location.href = url;
+          }
+        },
+      };
+    </script>
+  </body>
+</html>
